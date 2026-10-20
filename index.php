@@ -3,6 +3,8 @@ declare(strict_types=1);
 session_start();
 $cfg = require __DIR__ . '/config.php';
 
+/* ───────────── Utilidades ───────────── */
+
 function jsonOut(array $data, int $code = 200): never
 {
     http_response_code($code);
@@ -11,6 +13,7 @@ function jsonOut(array $data, int $code = 200): never
     exit;
 }
 
+/** Devuelve el celular peruano de 9 dígitos (9XXXXXXXX) o null si el formato no es válido. */
 function normalizePe(string $raw): ?string
 {
     $d = preg_replace('/\D+/', '', $raw) ?? '';
@@ -22,6 +25,7 @@ function normalizePe(string $raw): ?string
     return preg_match('/^9\d{8}$/', $d) ? $d : null;
 }
 
+/** Detecta patrones típicos de números inventados: 999999999, 912345678, 987654321, etc. */
 function looksFake(string $n): bool
 {
     if (count(array_unique(str_split($n))) <= 2) {
@@ -36,7 +40,7 @@ function looksFake(string $n): bool
     if ($up >= 7 || $down >= 7) {
         return true;
     }
-    return (bool)preg_match('/(\d)\1{5,}/', $n);
+    return (bool)preg_match('/(\d)\1{5,}/', $n); // 6 o más dígitos iguales seguidos
 }
 
 function normalizeOperator(?string $name): ?string
@@ -52,6 +56,7 @@ function normalizeOperator(?string $name): ?string
     };
 }
 
+/* ───────────── Caché (SQLite) ───────────── */
 
 function db(): ?PDO
 {
@@ -92,8 +97,11 @@ function cacheSet(string $n, string $provider, array $result): void
     $st->execute([$n, $provider, json_encode($result, JSON_UNESCAPED_UNICODE), time()]);
 }
 
+/* ───────────── Proveedores ───────────── */
+
 function lookupOffline(string $n): array
 {
+    // Sin proveedor no se puede confirmar existencia ni operador: solo se descartan los evidentemente falsos.
     return [
         'status' => 'format_ok',
         'operator' => null,
@@ -161,6 +169,7 @@ function lookupNumber(string $n, array $cfg): array
     return ['number' => $n, 'cached' => false] + $res;
 }
 
+/* ───────────── Lectura de archivos ───────────── */
 
 function readXlsxCells(string $path): array
 {
@@ -213,6 +222,7 @@ function extractTokens(string $text): array
     return preg_split('/[\r\n,;\t]+/', $text, -1, PREG_SPLIT_NO_EMPTY) ?: [];
 }
 
+/* ───────────── Acceso ───────────── */
 
 $action = $_GET['action'] ?? '';
 
@@ -234,6 +244,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['password'])) {
 }
 $logged = !empty($_SESSION['ok']);
 
+/* ───────────── API ───────────── */
 
 if ($action === 'lookup' || $action === 'parse') {
     if (!$logged) jsonOut(['error' => 'Sesión expirada. Recarga la página.'], 401);
@@ -245,6 +256,7 @@ if ($action === 'lookup' || $action === 'parse') {
         jsonOut(lookupNumber($n, $cfg));
     }
 
+    // parse: archivo (.xlsx, .csv, .txt) o texto pegado
     try {
         $tokens = [];
         if (!empty($_FILES['file']['tmp_name'])) {
@@ -344,6 +356,10 @@ td.mono { font-variant-numeric: tabular-nums; font-family: ui-monospace, Consola
 .notice { background: var(--warn-bg); color: var(--warn); border-radius: 8px; padding: 10px 14px; font-size: .88rem; margin-bottom: 20px; }
 .error { color: var(--bad); margin: 10px 0 0; }
 a { color: var(--accent); }
+footer { max-width: 920px; margin: 0 auto; padding: 20px; border-top: 1px solid var(--line);
+  display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;
+  color: var(--muted); font-size: .88rem; }
+footer nav { display: flex; gap: 16px; flex-wrap: wrap; }
 .login { max-width: 360px; margin: 14vh auto 0; }
 </style>
 </head>
@@ -451,6 +467,7 @@ function pill(status) {
 }
 const fmt = (n) => n ? n.replace(/(\d{3})(\d{3})(\d{3})/, '$1 $2 $3') : '';
 
+/* Pestañas */
 for (const id of ['one', 'list']) {
   $('tab-' + id).addEventListener('click', () => {
     for (const k of ['one', 'list']) {
@@ -460,6 +477,7 @@ for (const id of ['one', 'list']) {
   });
 }
 
+/* Un número */
 async function lookup(number) {
   try {
     const r = await fetch('?action=lookup&number=' + encodeURIComponent(number));
@@ -502,6 +520,7 @@ $('btn-single').addEventListener('click', async () => {
 });
 $('single').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('btn-single').click(); });
 
+/* Lista o archivo */
 function showError(msg) {
   const el = $('list-error');
   el.hidden = !msg;
@@ -611,5 +630,13 @@ $('btn-csv').addEventListener('click', () => {
 </script>
 <?php endif; ?>
 </main>
+<footer>
+  <span>Hecho por Langel</span>
+  <nav aria-label="Redes">
+    <a href="https://github.com/langel3set/" target="_blank" rel="noopener noreferrer">GitHub</a>
+    <a href="https://www.linkedin.com/in/luis-angel-bardales-cabrejos-aa160624a/" target="_blank" rel="noopener noreferrer">LinkedIn</a>
+    <a href="https://www.facebook.com/luis.angel.355655" target="_blank" rel="noopener noreferrer">Facebook</a>
+  </nav>
+</footer>
 </body>
 </html>
